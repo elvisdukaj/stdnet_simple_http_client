@@ -49,7 +49,7 @@ using namespace std::string_view_literals;
 // 500 Internal Server Error
 // 501 Not Implemented
 
-exec::task<void> make_client(auto& context, bool keep_alive)
+exec::task<void> make_client(auto& context, std::string url, bool keep_alive)
 {
   try {
     using stream_socket = stdnet::basic_stream_socket<stdnet::ip::tcp>;
@@ -57,12 +57,12 @@ exec::task<void> make_client(auto& context, bool keep_alive)
     stream_socket client(context, stdnet::ip::tcp::endpoint(stdnet::ip::address_v4::loopback(), 12345));
     co_await stdnet::async_connect(client);
 
-    std::string request("GET / HTTP/1.1\r\n");
+    std::string request = fmt::format("GET {} HTTP/1.1\r\n", url);
     if (keep_alive) {
       request.append("Connection: Keep-Alive\r\n");
-      request.append("GET / HTTP/1.1");
+      request.append("GET / HTTP/1.1\r\n");
     }
-    request.append("\r\n\r\n");
+    request.append("\r\n");
 
     co_await stdnet::async_send(client, stdnet::buffer(request));
     
@@ -76,14 +76,12 @@ exec::task<void> make_client(auto& context, bool keep_alive)
 
 int main(int argc, char* argv[])
 {
-    bool keep_alive = false;
-    if (argc > 1) {
-      keep_alive = std::stoi(argv[1]) != 0;
-    }
+    const bool keep_alive = (argc >= 2) ? std::stoi(argv[1]) != 0 : false;
+    const std::string url = argc >= 3 ? std::string{argv[2]} : std::string{"/"};
 
     stdnet::io_context context;
     exec::async_scope scope;
-    scope.spawn(make_client(context, keep_alive));
+    scope.spawn(make_client(context, url, keep_alive));
     context.run();
     stdexec::sync_wait(scope.on_empty());
 }
